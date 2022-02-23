@@ -121,3 +121,20 @@ class Command(Module):
             lines.append("}")
 
         return lines
+
+
+@dataclass
+class Commented(Module):
+    """
+    OpenSCAD module with comment.
+    """
+
+    comment: str
+    child: Module
+
+    def to_scad(self) -> List[str]:
+        child_lines = self.child.to_scad()
+        if not child_lines:
+            return []
+        comment_lines = self.comment.splitlines()
+        return [f"// {line}" for line in comment_lines] + child_lines

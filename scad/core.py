@@ -3,9 +3,10 @@ The module provides an interface for creating OpenSCAD objects.
 """
 
 from abc import ABC, abstractmethod
+import textwrap
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from scad.scad import Command, Module
+from scad.scad import Command, Commented, Module
 
 Vector3 = Tuple[float, float, float]
 Vector4 = Tuple[float, float, float, float]
@@ -53,6 +54,14 @@ class ScadObject(ABC):
         A new object with given name.
         """
         return NamedWrapper(self, name, hidden_names)
+
+    def commented(self, comment: str, *, dedent=True) -> "ScadObject":
+        """
+        A new object that will be commented in .scad file.
+        """
+        if dedent:
+            comment = textwrap.dedent(comment).strip("\n")
+        return CommentedWrapper(self, comment)
 
     def with_hidden_descendants(self, hidden_names: Iterable[str]) -> "ScadObject":
         """
@@ -164,7 +173,27 @@ class NamedWrapper(ScadObject):
         return [self._child]
 
     def to_command(self) -> Module:
+        if self.name is not None:
+            return Commented(self.name, self._child.to_command())
         return self._child.to_command()
+
+
+class CommentedWrapper(ScadObject):
+    """
+    Adds comments to objects.
+    """
+
+    def __init__(self, child: ScadObject, comment: str) -> None:
+        super().__init__()
+
+        self._child = child
+        self._comment = comment
+
+    def iter_children(self) -> Iterable["ScadObject"]:
+        return [self._child]
+
+    def to_command(self) -> Module:
+        return Commented(self._comment, self._child.to_command())
 
 
 class SimpleModule(ScadObject):
