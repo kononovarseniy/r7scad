@@ -1,3 +1,7 @@
+"""
+Creates something.
+"""
+
 from pathlib import Path
 
 from scad.core import ScadObject
@@ -6,6 +10,9 @@ from scad.primitives import box, sphere
 
 
 def test() -> ScadObject:
+    """
+    Create something.
+    """
     result = IDUObject()
     result += box(10, 10, 5, center=True).translated((0, 0, -1)).named("Translated big box")
     result -= box(4, 4, 4, center=True)
