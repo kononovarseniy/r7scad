@@ -13,15 +13,15 @@ def format_value(value: Any) -> str:
     """
     if isinstance(value, bool):
         return "true" if value else "false"
-    elif isinstance(value, (int, float)):
+    if isinstance(value, (int, float)):
         return str(value)
-    elif isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple)):
         return f"[{', '.join(str(item) for item in value)}]"
-    elif isinstance(value, str):
+    if isinstance(value, str):
         # TODO: Excape string.
         return f'"{value}"'
-    else:
-        raise ValueError("Unsupported type")
+
+    raise ValueError("Unsupported type")
 
 
 def format_argument(name: str, value: Any) -> str:
