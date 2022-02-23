@@ -2,8 +2,9 @@
 The module provides an interface for creating OpenSCAD objects.
 """
 
+import itertools
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from scad.scad import Command
 
@@ -16,6 +17,31 @@ class ScadObject(ABC):
     Base class for all SCAD objects.
     """
 
+    def search(self, name_parts: Tuple[str, ...]) -> List["ScadObject"]:
+        """
+        Recursively search for all descendants with the given name.
+        """
+        result = []
+        for child in self.iter_children():
+            result.extend(child.search(name_parts))
+        return result
+
+    def __item__(self, name: str | Tuple[str, ...]) -> "ScadObject":
+        name_parts = (name,) if isinstance(name, str) else name
+        children = self.search(name_parts)
+        if len(children) == 1:
+            return children[0]
+        if len(children) == 0:
+            raise KeyError(str(name))
+        raise KeyError(f"Found multiple descendants with the name {name}")
+
+    @abstractmethod
+    def iter_children(self) -> Iterable["ScadObject"]:
+        """
+        Returns an iterable with all child objects.
+        """
+        raise NotImplementedError()
+
     @abstractmethod
     def to_command(self) -> Command:
         """
@@ -23,7 +49,19 @@ class ScadObject(ABC):
         """
         raise NotImplementedError()
 
-    def colored(self, color: str | Vector3 | Vector4, alpha: float = None):
+    def named(self, name: str, hidden_names: Iterable[str] = None) -> "ScadObject":
+        """
+        A new object with given name.
+        """
+        return NamedWrapper(self, name, hidden_names)
+
+    def with_hidden_descendants(self, hidden_names: Iterable[str]) -> "ScadObject":
+        """
+        A new object with given name.
+        """
+        return NamedWrapper(self, None, hidden_names)
+
+    def colored(self, color: str | Vector3 | Vector4, alpha: float = None) -> "ScadObject":
         """
         A new object of the specified color.
         """
@@ -85,15 +123,65 @@ class ScadObject(ABC):
         return SimpleModule(name="*", arguments={}, children=[self])
 
 
+class NamedWrapper(ScadObject):
+    """
+    Gives names to objects.
+    """
+
+    def __init__(self, child: ScadObject, object_name: str = None, hidden_names: Iterable[str] = None) -> None:
+        super().__init__()
+
+        self._child = child
+        self._object_name = object_name
+        self._hidden_names = {} if hidden_names is None else set(hidden_names)
+
+    @property
+    def name(self) -> Optional[str]:
+        """
+        The name of the object.
+        """
+        return self._object_name
+
+    @property
+    def hidden_names(self) -> Iterable[str]:
+        """
+        List of names of hidden descendants.
+        """
+        return self._hidden_names
+
+    def search(self, name_parts: Tuple[str, ...]) -> List["ScadObject"]:
+        if name_parts[0] == self.name:
+            name_parts = name_parts[1:]
+            if len(name_parts) == 0:
+                return [self]
+        if name_parts[0] in self.hidden_names:
+            return []
+        result = []
+        for child in self.iter_children():
+            result.extend(child.search(name_parts))
+        return result
+
+    def iter_children(self) -> Iterable["ScadObject"]:
+        return [self._child]
+
+    def to_command(self) -> Command:
+        return self._child.to_command()
+
+
 class SimpleModule(ScadObject):
     """
     SCAD object representing a specific SCAD command.
     """
 
     def __init__(self, name: str, arguments: Dict[str, Any], children: Iterable[ScadObject]) -> None:
+        super().__init__()
+
         self._name = name
         self._arguments = dict(arguments)
         self._children = list(children)
+
+    def iter_children(self) -> Iterable["ScadObject"]:
+        return self._children
 
     def to_command(self) -> Command:
         return Command(
@@ -183,7 +271,12 @@ class Minkowski(ScadObject):
     """
 
     def __init__(self, objects: Iterable[ScadObject] = None) -> None:
+        super().__init__()
+
         self._objects = list(objects or []) if objects is not None else []
+
+    def iter_children(self) -> Iterable["ScadObject"]:
+        return self._objects
 
     def add(self, scad_object) -> "Minkowski":
         """
@@ -206,7 +299,12 @@ class Hull(ScadObject):
     """
 
     def __init__(self, objects: Iterable[ScadObject] = None) -> None:
+        super().__init__()
+
         self._objects = list(objects or []) if objects is not None else []
+
+    def iter_children(self) -> Iterable["ScadObject"]:
+        return self._objects
 
     def add(self, scad_object) -> "Hull":
         """
@@ -245,9 +343,14 @@ class IDUObject(ScadObject):
         negative_objects: Iterable[ScadObject] = None,
         intersection_objects: Iterable[ScadObject] = None,
     ) -> None:
+        super().__init__()
+
         self._positive_objects = list(positive_objects) if positive_objects is not None else []
         self._negative_objects = list(negative_objects) if negative_objects is not None else []
         self._intersection_objects = list(intersection_objects) if intersection_objects is not None else []
+
+    def iter_children(self) -> Iterable["ScadObject"]:
+        return itertools.chain(self._positive_objects, self._negative_objects, self._intersection_objects)
 
     def add_positive(self, scad_object: ScadObject) -> "IDUObject":
         """
