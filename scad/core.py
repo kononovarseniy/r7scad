@@ -2,14 +2,19 @@
 The module provides an interface for creating OpenSCAD objects.
 """
 
-from abc import ABC, abstractmethod
 import textwrap
+from abc import ABC, abstractmethod
+from math import pi
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from pytransform3d import rotations, transformations
 
 from scad.scad import Command, Commented, Module
 
 Vector3 = Tuple[float, float, float]
 Vector4 = Tuple[float, float, float, float]
+
+TransformationMatrix = Tuple[Vector4, Vector4, Vector4, Vector4]
 
 
 class ScadObject(ABC):
@@ -76,29 +81,35 @@ class ScadObject(ABC):
         # TODO: Check values are valid.
         return SimpleModule(name="color", arguments={"c": color, "alpha": alpha}, children=[self])
 
+    def transformed(self, matrix: TransformationMatrix) -> "ScadObject":
+        """
+        A new object with transformation matrix applied.
+        """
+        return Transformation(self, matrix)
+
     def scaled(self, vector: Vector3) -> "ScadObject":
         """
         A new object with scaling applied.
         """
-        return SimpleModule(name="scale", arguments={"v": vector}, children=[self])
+        return Scaling(self, vector)
 
-    def rotated(self, vector: Vector3) -> "ScadObject":
+    def rotated(self, angle_deg: Vector3 | float, axis: Vector3 = None) -> "ScadObject":
         """
         A new object with rotation applied.
         """
-        return SimpleModule(name="rotate", arguments={"a": vector}, children=[self])
+        return Rotation(self, angle_deg, axis)
 
     def translated(self, vector: Vector3) -> "ScadObject":
         """
         A new object with translation applied.
         """
-        return SimpleModule(name="translate", arguments={"v": vector}, children=[self])
+        return Translation(self, vector)
 
     def mirrored(self, vector: Vector3) -> "ScadObject":
         """
         A new mirrored object.
         """
-        return SimpleModule(name="mirror", arguments={"v": vector}, children=[self])
+        return Reflection(self, vector)
 
     def rendered(self, convexity: int = None):
         """
@@ -216,4 +227,133 @@ class SimpleModule(ScadObject):
             name=self._name,
             arguments=self._arguments,
             children=[child.to_command() for child in self._children],
+        )
+
+
+class Transformation(ScadObject):
+    """
+    Represents the spatial transformation of a child object.
+    """
+
+    def __init__(self, child: ScadObject, matrix: TransformationMatrix) -> None:
+        super().__init__()
+
+        self._child = child
+        self._matrix = matrix
+
+    @property
+    def matrix(self) -> TransformationMatrix:
+        """
+        Transformation matrix.
+        """
+        return self._matrix
+
+    def iter_children(self) -> Iterable["ScadObject"]:
+        return [self._child]
+
+    def to_command(self) -> Module:
+        return Command(
+            name="multmatrix",
+            arguments={"m": self._matrix},
+            children=[self._child.to_command()],
+        )
+
+
+class Scaling(Transformation):
+    """
+    Represents scaling.
+    """
+
+    def __init__(self, child: ScadObject, vector: Vector3) -> None:
+        super().__init__(
+            child,
+            matrix=(
+                (vector[0], 0, 0, 0),
+                (0, vector[1], 0, 0),
+                (0, 0, vector[2], 0),
+                (0, 0, 0, 1),
+            ),
+        )
+
+        self._vector = vector
+
+    def to_command(self) -> Module:
+        return Command(
+            name="scale",
+            arguments={"v": self._vector},
+            children=[self._child.to_command()],
+        )
+
+
+class Rotation(Transformation):
+    """
+    Represents rotation.
+    """
+
+    def __init__(self, child: ScadObject, angle_deg: Vector3 | float, axis: Vector3 = None) -> None:
+        if axis is not None:
+            if isinstance(angle_deg, tuple):
+                raise ValueError("When angle_deg specified as a vector, axis must be None")
+            rotation_matrix = rotations.matrix_from_axis_angle(axis + (angle_deg * pi / 180,))
+        else:
+            if isinstance(angle_deg, tuple):
+                rotation_matrix = rotations.R_id
+                for basis, angle in enumerate(angle_deg):
+                    rotation_matrix = rotations.active_matrix_from_angle(basis, angle * pi / 180) @ rotation_matrix
+        matrix = transformations.transform_from(rotation_matrix, (0, 0, 0))
+
+        super().__init__(child, matrix)
+
+        self._angle_deg = angle_deg
+        self._axis = axis
+
+    def to_command(self) -> Module:
+        return Command(
+            name="rotate",
+            arguments={"a": self._angle_deg, "v": self._axis},
+            children=[self._child.to_command()],
+        )
+
+
+class Translation(Transformation):
+    """
+    Represents translation.
+    """
+
+    def __init__(self, child: ScadObject, vector: Vector3) -> None:
+        super().__init__(child, transformations.transform_from(rotations.R_id, vector))
+
+        self._vector = vector
+
+    def to_command(self) -> Module:
+        return Command(
+            name="translate",
+            arguments={"v": self._vector},
+            children=[self._child.to_command()],
+        )
+
+
+class Reflection(Transformation):
+    """
+    Represents reflection.
+    """
+
+    def __init__(self, child: ScadObject, vector: Vector3) -> None:
+        # From: https://en.wikipedia.org/wiki/Transformation_matrix#Reflection_2
+        a, b, c = vector  # pylint: disable=invalid-name
+        matrix = (
+            (1 - 2 * a * a, -2 * b * a, -2 * c * a, 0),
+            (-2 * a * b, 1 - 2 * b * b, -2 * c * b, 0),
+            (-2 * a * c, -2 * b * c, 1 - 2 * c * c, 0),
+            (0, 0, 0, 1),
+        )
+        super().__init__(child, matrix)
+
+        self._vector = vector
+
+    def to_command(self) -> Module:
+        return Command(
+            name="mirror",
+            arguments={"v": self._vector},
+            children=[self._child.to_command()],
         )
