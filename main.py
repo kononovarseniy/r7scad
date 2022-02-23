@@ -1,5 +1,7 @@
 from pathlib import Path
-from scad.core import IDUObject, ScadObject
+
+from scad.core import ScadObject
+from scad.operators import IDUObject
 from scad.primitives import box, sphere
 
 
