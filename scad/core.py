@@ -5,7 +5,7 @@ The module provides an interface for creating OpenSCAD objects.
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from scad.scad import Command
+from scad.scad import Command, Module
 
 Vector3 = Tuple[float, float, float]
 Vector4 = Tuple[float, float, float, float]
@@ -42,7 +42,7 @@ class ScadObject(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def to_command(self) -> Command:
+    def to_command(self) -> Module:
         """
         Create SCAD command from the object.
         """
@@ -163,7 +163,7 @@ class NamedWrapper(ScadObject):
     def iter_children(self) -> Iterable["ScadObject"]:
         return [self._child]
 
-    def to_command(self) -> Command:
+    def to_command(self) -> Module:
         return self._child.to_command()
 
 
@@ -182,7 +182,7 @@ class SimpleModule(ScadObject):
     def iter_children(self) -> Iterable["ScadObject"]:
         return self._children
 
-    def to_command(self) -> Command:
+    def to_command(self) -> Module:
         return Command(
             name=self._name,
             arguments=self._arguments,

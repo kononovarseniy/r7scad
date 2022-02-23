@@ -6,7 +6,7 @@ import itertools
 from typing import Iterable
 
 from scad.core import ScadObject
-from scad.scad import Command
+from scad.scad import Command, Module
 
 
 class Minkowski(ScadObject):
@@ -29,7 +29,7 @@ class Minkowski(ScadObject):
         self._objects.append(scad_object)
         return self
 
-    def to_command(self) -> Command:
+    def to_command(self) -> Module:
         return Command(
             name="minkowski",
             arguments={},
@@ -57,7 +57,7 @@ class Hull(ScadObject):
         self._objects.append(scad_object)
         return self
 
-    def to_command(self) -> Command:
+    def to_command(self) -> Module:
         return Command(
             name="hull",
             arguments={},
@@ -127,27 +127,15 @@ class IDUObject(ScadObject):
     def __imul__(self, scad_object: ScadObject) -> "IDUObject":
         return self.intersect(scad_object)
 
-    def to_command(self) -> Command:
-        positive_commands = [child.to_command() for child in self._positive_objects]
-        negative_commands = [child.to_command() for child in self._negative_objects]
-        intersection_commands = [child.to_command() for child in self._intersection_objects]
+    def to_command(self) -> Module:
+        union_children = [child.to_command() for child in self._positive_objects]
+        difference_children = [child.to_command() for child in self._negative_objects]
+        intersection_children = [child.to_command() for child in self._intersection_objects]
 
-        return Command(
-            name="intersection",
-            arguments={},
-            children=[
-                Command(
-                    name="difference",
-                    arguments={},
-                    children=[
-                        Command(
-                            name="union",
-                            arguments={},
-                            children=positive_commands,
-                        )
-                    ]
-                    + negative_commands,
-                )
-            ]
-            + intersection_commands,
-        )
+        union = Command(name="union", arguments={}, children=union_children)
+        difference_children.insert(0, union)
+
+        difference = Command(name="difference", arguments={}, children=difference_children)
+        intersection_children.insert(0, difference)
+
+        return Command(name="intersection", arguments={}, children=intersection_children)

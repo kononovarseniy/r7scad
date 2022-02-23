@@ -2,9 +2,10 @@
 The module provides tools for creating .scad files.
 """
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 
 def format_value(value: Any) -> str:
@@ -64,15 +65,34 @@ commands_to_skip_if_no_children = (
 )
 
 
-@dataclass
-class Command:
+class Module(ABC):
     """
-    OpenSCAD command/module.
+    OpenSCAD base class.
+    """
+
+    @abstractmethod
+    def to_scad(self) -> List[str]:
+        """
+        Convert the object to OpenSCAD representation.
+        """
+        raise NotImplementedError()
+
+    def write_to(self, file: Path) -> None:
+        """
+        Write the object ot .scad file.
+        """
+        file.write_text("\n".join(self.to_scad()))
+
+
+@dataclass
+class Command(Module):
+    """
+    OpenSCAD command.
     """
 
     name: str
     arguments: Dict[str, Any]
-    children: List["Command"]
+    children: Sequence[Module]
 
     def to_scad(self) -> List[str]:
         """
@@ -101,9 +121,3 @@ class Command:
             lines.append("}")
 
         return lines
-
-    def write_to(self, file: Path) -> None:
-        """
-        Write the object ot .scad file.
-        """
-        file.write_text("\n".join(self.to_scad()))
