@@ -23,13 +23,6 @@ class ScadObject(ABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def copy(self) -> "ScadObject":
-        """
-        Create copy of the object.
-        """
-        raise NotImplementedError()
-
     def colored(self, color: str | Vector3 | Vector4, alpha: float = None):
         """
         A new object of the specified color.
@@ -108,9 +101,6 @@ class SimpleModule(ScadObject):
             arguments=self._arguments,
             children=[child.to_command() for child in self._children],
         )
-
-    def copy(self) -> ScadObject:
-        return SimpleModule(self._name, self._arguments, self._children)
 
 
 def box(x: float, y: float, z: float, *, center: bool = False) -> ScadObject:
@@ -202,9 +192,6 @@ class Minkowski(ScadObject):
         self._objects.append(scad_object)
         return self
 
-    def copy(self) -> "Minkowski":
-        return Minkowski(self._objects)
-
     def to_command(self) -> Command:
         return Command(
             name="minkowski",
@@ -227,9 +214,6 @@ class Hull(ScadObject):
         """
         self._objects.append(scad_object)
         return self
-
-    def copy(self) -> "Hull":
-        return Hull(self._objects)
 
     def to_command(self) -> Command:
         return Command(
@@ -295,9 +279,6 @@ class IDUObject(ScadObject):
 
     def __imul__(self, scad_object: ScadObject) -> "IDUObject":
         return self.intersect(scad_object)
-
-    def copy(self) -> "IDUObject":
-        return IDUObject(self._positive_objects, self._negative_objects)
 
     def to_command(self) -> Command:
         positive_commands = [child.to_command() for child in self._positive_objects]
