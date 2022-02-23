@@ -1,9 +1,16 @@
+"""
+The module provides tools for creating .scad files.
+"""
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
 
 def format_value(value: Any) -> str:
+    """
+    Convert Python object to OpenSCAD representation.
+    """
     if isinstance(value, bool):
         return "true" if value else "false"
     elif isinstance(value, (int, float)):
@@ -18,14 +25,23 @@ def format_value(value: Any) -> str:
 
 
 def format_argument(name: str, value: Any) -> str:
+    """
+    Format named argument.
+    """
     return f"{name}={format_value(value)}"
 
 
 def format_command_arguments(arguments: Dict[str, Any]) -> str:
+    """
+    Format command arguments.
+    """
     return ", ".join(format_argument(name, value) for name, value in arguments.items() if value is not None)
 
 
 def indent(indentation: int, line: str) -> str:
+    """
+    Add indentation to the line.
+    """
     return " " * indentation + line
 
 
@@ -50,11 +66,18 @@ commands_to_skip_if_no_children = (
 
 @dataclass
 class Command:
+    """
+    OpenSCAD command/module.
+    """
+
     name: str
     arguments: Dict[str, Any]
     children: List["Command"]
 
     def to_scad(self) -> List[str]:
+        """
+        Convert the object to OpenSCAD representation.
+        """
         if self.name in debug_commands:
             header = self.name
         else:
@@ -80,4 +103,7 @@ class Command:
         return lines
 
     def write_to(self, file: Path) -> None:
+        """
+        Write the object ot .scad file.
+        """
         file.write_text("\n".join(self.to_scad()))
